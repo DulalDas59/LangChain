@@ -1,36 +1,27 @@
-from langchain.agents import create_agent
-from langgraph.checkpoint.postgres import PostgresSaver
-
-def short_term_memory():
-    DB_URI = "postgresql://postgres:postgres@localhost:5442/postgres?sslmode=disable"
-    with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
-        checkpointer.setup() # auto create tables in PostgresSql
-        agent = create_agent(
-            "gpt-5",
-            tools=[get_user_info],
-            checkpointer=checkpointer,
-        )
-
 from langchain.agents import create_agent, AgentState
-from langgraph.checkpoint.memory import InMemorySaver
+from langchain.tools import tool, ToolRuntime
 
 
-class CustomAgentState(AgentState):
+class CustomState(AgentState):
     user_id: str
-    preferences: dict
+
+@tool
+def get_user_info(
+    runtime: ToolRuntime
+) -> str:
+    """Look up user info."""
+    user_id = runtime.state["user_id"]
+    return "User is John Smith" if user_id == "user_123" else "Unknown user"
 
 agent = create_agent(
-    "gpt-5",
+    model="gpt-5-nano",
     tools=[get_user_info],
-    state_schema=CustomAgentState,
-    checkpointer=InMemorySaver(),
+    state_schema=CustomState,
 )
 
-# Custom state can be passed in invoke
-result = agent.invoke(
-    {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "user_id": "user_123",
-        "preferences": {"theme": "dark"}
-    },
-    {"configurable": {"thread_id": "1"}})
+result = agent.invoke({
+    "messages": "look up user information",
+    "user_id": "user_123"
+})
+print(result["messages"][-1].content)
+# > User is John Smith.
